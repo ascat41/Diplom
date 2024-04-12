@@ -1,37 +1,26 @@
 #ifndef INC_AHBPCI_AHBPCI_H_
 #define INC_AHBPCI_AHBPCI_H_
 
+#include "grpci2.h"
+
 #include <stdint.h>
 
-/**
- * This typedef contains IP hardware configuration information.
- */
+struct ahbpci_pcibar_cfg {
+	unsigned int pciadr;	// PCI адрес BAR'а (содержимое BAR'а)
+	unsigned int ahbadr;	// pciadr переводится в этот AHB адрес
+	unsigned int barsize;	// PCI BAR size, степень 2
+};
 
-typedef  struct {
-	uint16_t  DeviceId;			    /**< Unique ID of PCIe IP */
-	uint32_t* BaseAddress;		    /**< Register base address */
-	uint8_t   LocalBarsNum;		    /* The number of local bus (AXI) BARs
-					                 * in hardware
-					                 */
-	uint8_t   IncludeBarOffsetReg;	/**<Are BAR Offset registers built in
-					                 * hardware
-					                 */
-	uint8_t   IncludeRootComplex;	/**< Is IP built as root complex */
-} AHBPCI_Config_t;
+void ahbpci_memspace_init(uint32_t const* ahbpci);
+void ahbpci_init(GRPCI2_REGS_TypeDef* regs/*, struct ahbpci_pcibar_cfg* pcibar_cfg*/);
+uint32_t ahbpci_config_read32(uint8_t dev, uint8_t func, uint8_t ofs);
+uint16_t ahbpci_config_read16(uint8_t dev, uint8_t func, uint8_t ofs);
+uint8_t ahbpci_config_read8(uint8_t dev, uint8_t func, uint8_t ofs);
+void ahbpci_config_write32(uint8_t dev, uint8_t func, uint8_t ofs, uint32_t value);
+void ahbpci_config_write16(uint8_t dev, uint8_t func, uint8_t ofs, uint16_t value);
+void ahbpci_config_write8(uint8_t dev, uint8_t func, uint8_t ofs, uint8_t value);
 
-/**
- * The XAxiPcie driver instance data. The user is required to allocate a
- * variable of this type for every PCIe device in the system that will be
- * using this API. A pointer to a variable of this type is passed to the driver
- * API functions defined here.
- */
-
-typedef struct {
-	AHBPCI_Config_t Config;             /**< Configuration data */
-	uint32_t        IsReady;            /**< Is IP been initialized and ready */
-	uint32_t        MaxNumOfBuses;		/**< If this is RC IP, Max Number of
-                                         * Buses */
-} AHBPCI_t;
+uint32_t ahbpci_read_config(uint8_t dev, uint8_t func, uint8_t reg);
 
 
 #endif /* INC_AHBPCI_AHBPCI_H_ */
