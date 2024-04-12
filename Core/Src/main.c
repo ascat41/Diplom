@@ -1,7 +1,7 @@
 #include "plug_and_play.h"
 #include "grgpio.h"
 #include "gptimer1.h"
-#include "grpci2.h"
+#include "grpci2/grpci2api.h"
 #include "ahbpci/ahbpci.h"
 
 #include <bcc/bcc.h>

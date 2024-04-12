@@ -1,5 +1,5 @@
 #include "ahbpci/ahbpci.h"
-#include "grpci2.h"
+#include "grpci2/grpci2api.h"
 
 #include <stdlib.h>
 #include <stdio.h>
