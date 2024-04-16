@@ -1,3 +1,6 @@
+#ifndef INC_GRPCI2_GRPCI2EXTRA_H_
+#define INC_GRPCI2_GRPCI2EXTRA_H_
+
 #define MAX_NUM_CH 8
 #define MAX_MAX_Q_ENTRY 128
 
@@ -45,5 +48,5 @@
   int op_checkdata(volatile unsigned int* p1, volatile unsigned int*p2, unsigned int data, int length);
 
 
-
+#endif /* INC_GRPCI2_GRPCI2EXTRA_H_ */
 

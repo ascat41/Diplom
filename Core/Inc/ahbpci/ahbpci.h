@@ -1,26 +1,36 @@
 #ifndef INC_AHBPCI_AHBPCI_H_
 #define INC_AHBPCI_AHBPCI_H_
 
-#include "grpci2.h"
+#include "grpci2/grpci2api.h"
 
 #include <stdint.h>
 
-struct ahbpci_pcibar_cfg {
-	unsigned int pciadr;	// PCI адрес BAR'а (содержимое BAR'а)
-	unsigned int ahbadr;	// pciadr переводится в этот AHB адрес
-	unsigned int barsize;	// PCI BAR size, степень 2
-};
+#define PCI_MAX_DEVICES			(21) // TODO: проверить сколько должно быть
+#define PCI_MAX_FUNCTIONS		 (8)
 
-void ahbpci_memspace_init(uint32_t const* ahbpci);
-void ahbpci_init(GRPCI2_REGS_TypeDef* regs/*, struct ahbpci_pcibar_cfg* pcibar_cfg*/);
-uint32_t ahbpci_config_read32(uint8_t dev, uint8_t func, uint8_t ofs);
-uint16_t ahbpci_config_read16(uint8_t dev, uint8_t func, uint8_t ofs);
-uint8_t ahbpci_config_read8(uint8_t dev, uint8_t func, uint8_t ofs);
-void ahbpci_config_write32(uint8_t dev, uint8_t func, uint8_t ofs, uint32_t value);
-void ahbpci_config_write16(uint8_t dev, uint8_t func, uint8_t ofs, uint16_t value);
-void ahbpci_config_write8(uint8_t dev, uint8_t func, uint8_t ofs, uint8_t value);
+// Error values that may be returned by the PCI bios.
+typedef enum {
+	en_pcibios_successful          = 0x00,
+	en_pcibios_func_not_supported  = 0x81,
+	en_pcibios_bad_vendor_id       = 0x83,
+	en_pcibios_device_not_found    = 0x86,
+	en_pcibios_bad_register_number = 0x87,
+	en_pcibios_set_faile           = 0x88,
+	en_pcibios_buffer_too_small    = 0x89
+} en_err_value;
 
-uint32_t ahbpci_read_config(uint8_t dev, uint8_t func, uint8_t reg);
+
+//void ahbpci_memspace_init(uint32_t const* ahbpci);
+void ahbpci_host_init(void);
+void ahbpci_allocate_resources(void);
+void ahbpci_init(void);
+en_err_value ahbpci_config_read32(uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset, uint32_t* val);
+en_err_value ahbpci_config_read16(uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset, uint16_t* val);
+en_err_value ahbpci_config_read8(uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset, uint8_t* val);
+en_err_value ahbpci_config_write32(uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset, uint32_t val);
+en_err_value ahbpci_config_write16(uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset, uint16_t val);
+en_err_value ahbpci_config_write8(uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset, uint8_t val);
+
 
 
 #endif /* INC_AHBPCI_AHBPCI_H_ */

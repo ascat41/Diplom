@@ -1,3 +1,6 @@
+#ifndef INC_GRPCI2_GRPCI2API_H_
+#define INC_GRPCI2_GRPCI2API_H_
+
 /* GRPCI2 APB Register *********************************************************** */
 /* Ctrl register */
 #define GRPCI2_CTRL_RST       (1 << 31)
@@ -334,3 +337,5 @@ int grpci2_dma_desc_init(struct grpci2regs* apb, volatile unsigned int **chdesc,
 /* GRPCI2 DMA check transfer ***************************************************** */
   unsigned int grpci2_dma_check(volatile unsigned int **ddesc);
 
+
+#endif /* INC_GRPCI2_GRPCI2API_H_ */

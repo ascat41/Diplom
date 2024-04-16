@@ -1,6 +1,8 @@
 #include "grpci2/grpci2api.h"
 #include "grpci2/grpci2extra.h"
 
+#include <stdio.h>
+
 /* GRPCI2 DMA Descriptors print ************************************************** */
   void grpci2_dma_desc_print(volatile unsigned int *chdesc){
     int i,j;

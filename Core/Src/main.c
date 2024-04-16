@@ -18,7 +18,7 @@
 struct bcc_isr_node inode7   = {0};
 GRGPIO_TypeDef*      GPIO_ptr    = NULL;
 GPTIMER1_TypeDef*    TIMER1_ptr  = NULL;
-GRPCI2_REGS_TypeDef* PCIREGS_ptr = NULL;
+//GRPCI2_REGS_TypeDef* PCIREGS_ptr = NULL;
 uint32_t* AHBPCI_ptr             = NULL;
 
 // function prototypes
@@ -40,7 +40,6 @@ void timer1_handler(void* arg, int source) {
 void init() {
 	GPIO_ptr    = (GRGPIO_TypeDef*)      get_GRGPIO();
 	TIMER1_ptr  = (GPTIMER1_TypeDef*)    get_GPTIMER();
-	PCIREGS_ptr = (GRPCI2_REGS_TypeDef*) get_GRPCI2();
 	AHBPCI_ptr  = (uint32_t*)            get_GRPCI2_AHB();
 
 	inode7.source  = 7;
@@ -57,35 +56,13 @@ void init() {
 
 	GPIO_ptr->DIRECTION      = 0x0000FFFF;  // Порт на вывод
 
-	/* Set AHB to PCI mapping for all AMBA AHB masters */
-	for(uint32_t i = 0; i < 16; i++) {
-		PCIREGS_ptr->AHBMST_MAP[i] = AHBMST2PCIADR;
-	}
-
-	/* Make sure dirq(0) sampling is enabled */
-	PCIREGS_ptr->CTRL = (PCIREGS_ptr->CTRL & 0xFFFFFF0F) | (1 << 4);
-
-//	ahbpci_memspace_init(AHBPCI_ptr);
-	ahbpci_init(PCIREGS_ptr);
+	// TODO: необходимо прокинуть указатель на пространства pci и apb регистров хост-контроллера
+	ahbpci_init();
 }
 
 int main() {
-//	uint32_t devvenid = 0;
-
+//	setbuf(stdout, NULL);
 	init();
-
-	uint32_t vendev0 = ahbpci_config_read32(0, 0, 0);
-//	ahbpci_config_write32(0, 0, 0x04, 0x06003002);
-//	uint32_t vendev7 = ahbpci_read_config(1, 0, 0);
-//
-	printf("vendev0 = %" PRIu32 "\n", vendev0);
-//	printf("vendev1 = %" PRIu32 "\n", vendev7);
-
-
-//	for (uint32_t i = 0; i < 100; i++) {
-//		devvenid = ahbpci_config_read32(i, 0, 0x00);
-//		printf("devven%" PRIu32 " = %" PRIx32 "\n", i, devvenid);
-//	}
 
 	while (1) {}
 

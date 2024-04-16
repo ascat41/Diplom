@@ -4,6 +4,23 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <inttypes.h>
+//#include <stdarg.h>
+
+//#ifdef DEBUG
+//#define DBG(x...) printf(x)
+//#else
+//#define DBG(x...)
+//#endif
+
+//#define DEBUG 1
+
+#ifdef DEBUG
+#define DBG(fmt, ...) \
+		do { if (DEBUG) fprintf(stdout, fmt, __VA_ARGS__); } while (0)
+#else
+#define DBG(x...)
+#endif
+
 
 // private macro
 #define HOST      (0)
@@ -45,108 +62,216 @@
 #define	PCI_MAXLAT	     (0x3f)
 
 // private variables
-static uint32_t const* ahbpci_mem_ptr = (uint32_t*)0xE0000000;
-static uint32_t const* ahbpci_io_ptr  = (uint32_t*)0xFFF80000;
-static uint32_t const* ahbpci_cfg_ptr = (uint32_t*)0xFFF90000;
-//static struct ahbpci_pcibar_cfg* _pcibar_cfg = { 0 };
+static uint32_t* const ahbpci_mem_ptr = (uint32_t*)0xE0000000;
+//static uint32_t* const ahbpci_io_ptr  = (uint32_t*)0xFFF80000;
+static uint32_t* const ahbpci_cfg_ptr = (uint32_t*)0xFFF90000;
+
+static uint32_t* const apb_regs_ptr   = (uint32_t*)0x80000400;
+static struct grpci2regs* apb_regs = (struct grpci2regs*)apb_regs_ptr;
+static struct grpci2_pci_conf_space_regs conf[PCI_MAX_DEVICES];	// conf[0] is host
 
 // public functions
-void ahbpci_memspace_init(uint32_t const* ahbpci) {
-	ahbpci_mem_ptr = ahbpci + AHBPCI_MEM_OFFSET;
-	ahbpci_io_ptr  = ahbpci + AHBPCI_IO_OFFSET;
-	ahbpci_cfg_ptr = ahbpci + AHBPCI_CFG_OFFSET;
-}
-
-void ahbpci_init(GRPCI2_REGS_TypeDef* regs/*, struct ahbpci_pcibar_cfg* pcibar_cfg*/) {
-//	uint8_t capptr = 0;
-//	uint32_t io_map = 0;
-//	uint32_t size, pciadr, ahbadr = 0;
-	uint32_t data = 0;
-//	_pcibar_cfg = pcibar_cfg;
-
-//	// Отображение доступов AHB в доступы PCI для области ввода-вывода PCI
-//	regs->IO_MAP = (uint32_t)ahbpci_io_ptr;
+//void ahbpci_memspace_init(uint32_t const* ahbpci) {
+//	ahbpci_mem_ptr = ahbpci + AHBPCI_MEM_OFFSET;
+//	ahbpci_io_ptr  = ahbpci + AHBPCI_IO_OFFSET;
+//	ahbpci_cfg_ptr = ahbpci + AHBPCI_CFG_OFFSET;
+//}
 //
-//	// Отображение адреса доступа ведущего устройства AHB в адрес доступа к области памяти PCI
-//	for (uint32_t i = 0; i < 16; i++) {
-//		regs->AHBMST_MAP[i] = (uint32_t)ahbpci_mem_ptr;
-//	}
+void ahbpci_host_init(void) {
+	conf[0].head = (struct grpci2_head_pci_conf_space_regs*)ahbpci_cfg_ptr;
+	conf[0].ext = (struct grpci2_ext_pci_conf_space_regs*)((uint32_t)conf[0].head +
+	                 (grpci2_tw(conf[0].head->cap_pointer) & 0xff));
+
+	grpci2_mst_enable(&conf[0]);
+//	*(uint32_t*)0xfff90004 = 0x06003002;
+	grpci2_mem_enable(&conf[0]);
+	grpci2_io_disable(&conf[0]);
+	grpci2_set_latency_timer(&conf[0], 0x20);
+	grpci2_set_bar(&conf[0], 0, (unsigned int)ahbpci_mem_ptr); // PCI_ADDR
+	grpci2_set_barmap(&conf[0], 0, 0);
+//	grpci2_set_bus_big_endian(conf[0]); // TODO: возможно, придется убрать, т.к. этот регистр отстутствует в доке
+
+	grpci2_set_mstmap((struct grpci2regs*)apb_regs_ptr, 0, (unsigned int)ahbpci_mem_ptr); // PCI_ADDR
+
+	printf("conf addr = %" PRIx32 ", mem_ptr = %x", (uint32_t)conf[0].head, grpci2_tw(conf[0].head->bar[0]));
+}
+
+void ahbpci_allocate_resources(void) {
+	uint32_t* addr;
+    uint32_t slot, numfuncs, func, id, pos, size, tmp, dev, fn;
+    uint8_t header;
+    int32_t bar;
+
+ /*    res = (struct pci_res **) malloc(sizeof(struct pci_res *)*32*8*6); */
+
+/*     for (i = 0; i < 32*8*6; i++) { */
+/*         res[i] = (struct pci_res *) malloc(sizeof(struct pci_res));      */
+/*         res[i]->size = 0; */
+/*         res[i]->devfn = i; */
+/*     } */
+
+    addr = ahbpci_mem_ptr + 0x10000000;
+    for(slot = 1; slot < PCI_MAX_DEVICES; slot++) {
+
+    	ahbpci_config_read32(0, slot, 0, PCI_VENDOR, &id);
+
+
+        if(id == 0xffffffff || id == 0) {
+            /*
+             * This slot is empty
+             */
+            continue;
+        }
+
+
+        ahbpci_config_read8(0, slot, 0, PCI_HDRTYPE, &header);
+
+        if(header & 0x80)	{
+            numfuncs = PCI_MAX_FUNCTIONS;
+        }
+        else {
+            numfuncs = 1;
+        }
+
+        for(func = 0; func < numfuncs; func++) {
+
+        	ahbpci_config_read32(0, slot, func, PCI_VENDOR, &id);
+            if(id == 0xffffffff || id == 0) {
+                /*
+                 * This slot is empty
+                 */
+                continue;
+            }
+
+            ahbpci_config_read32(0, slot, func, PCI_REVID, &tmp);
+            tmp >>= 16;
+            if (tmp == 0x0604) { // PCI_CLASS_BRIDGE_PCI
+                continue;
+            }
+
+            for (pos = 0; pos < 6; pos++) {
+            	ahbpci_config_write32(0, slot, func, PCI_BAR(pos), 0xffffffff);
+            	ahbpci_config_read32(0, slot, func, PCI_BAR(pos), &size);
+
+                if (size == 0 || size == 0xffffffff || (size & 0xff1) != 0) {
+                	continue;
+                }
+                else {
+                    size &= 0xfffffff0;
+                }
+           /*          res[slot*8*6+func*6+pos]->size  = ~size+1; */
+/*                     res[slot*8*6+func*6+pos]->devfn = slot*8 + func; */
+/*                     res[slot*8*6+func*6+pos]->bar   = pos; */
+
+                size  = ~size+1;
+                bar = pos;
+         	    dev = (slot*8 + func) >> 3;
+         	    fn  = (slot*8 + func) & 7;
+
+         	    ahbpci_config_write32(0, dev, fn, PCI_BAR(bar), (uint32_t)addr);
+         	    addr += size;
+         	    ahbpci_config_read32(0, dev, fn, 0xC, &tmp);
+         	    ahbpci_config_write32(0, dev, fn, 0xC, tmp|0x4000);
+
+         	    printf("dev = %d, func = %d", dev, fn);
+         	    // Фиктивное чтение, чтобы получить адрес регистра конф. пространства (dev, func)
+         	    ahbpci_config_read32(0, dev, fn, PCI_VENDOR, &tmp);
+         	    conf[dev].head = (struct grpci2_head_pci_conf_space_regs*)&tmp;
+         	    conf[dev].ext = (struct grpci2_ext_pci_conf_space_regs*)((uint32_t)conf[dev].head +
+         	    				(grpci2_tw(conf[dev].head->cap_pointer) & 0xff));
 //
-//	// Получить указатель на capability
-//	capptr = ahbpci_config_read8(HOST, HOST_FUNC, PCI_CAP_PTR);
-//	printf("ahbpci_init: capptr = %" PRIx8 "\n", capptr);
 //
-//	// Разрешить перестановку байт
-//	io_map = ahbpci_config_read32(HOST, HOST_FUNC, capptr + CAP_IOMAP_OFS);
-//	printf("ahbpci_init: io_map = %" PRIx32 "\n", io_map);
-//	io_map = (io_map & ~0x1) | 1;
-//	ahbpci_config_write32(HOST, HOST_FUNC, capptr + CAP_IOMAP_OFS, io_map);
+////         	   	pci_mem_enable(0, dev, fn);
+         	    grpci2_mem_enable(&conf[dev]);
 
-	// Установить BAR'ы для хоста, чтобы дать доступ (DMA) другим устройствам
-//	for (uint32_t i = 0; i < 6; i++) {
-//		size = ~(pcibar_cfg[i].barsize-1);
-//		pcibar_cfg[i].pciadr &= size;
-//		pcibar_cfg[i].ahbadr &= size;
-//
-//		pciadr = pcibar_cfg[i].pciadr;
-//		ahbadr = pcibar_cfg[i].ahbadr;
-//
-//		ahbpci_config_write32(HOST, HOST_FUNC, capptr + CAP_BARSIZE_OFS + i * 4, size);
-//		ahbpci_config_write32(HOST, HOST_FUNC, capptr + CAP_BAR_OFS + i * 4, ahbadr);
-//		ahbpci_config_write32(HOST, HOST_FUNC, PCI_BAR(0) + i * 4, pciadr);
-//	}
-
-	// Установить как мастера на шине и разрешить запись в PCI память
-	data = ahbpci_config_read32(HOST, HOST_FUNC, PCI_COMMAND);
-	printf("ahbpci_init: data = %" PRIx32 "\n", data);
-	data |= (0x02 | 0x04);
-	ahbpci_config_write32(HOST, HOST_FUNC, PCI_COMMAND, data);
+         	    DBG("Slot: %d, function: %d, bar%d size: %x\n", slot, func, pos, ~size+1);
+			}
+		}
+	}
 }
 
-uint32_t ahbpci_config_read32(uint8_t dev, uint8_t func, uint8_t ofs) {
-	uint32_t* address = NULL;
-	uint32_t value = 0;
-	uint8_t reg = ofs & ~0x03;
-
-	address = (uint32_t*)( (uint32_t)ahbpci_cfg_ptr | (dev << 11) | (func << 8) | (reg << 2) );
-	value = *address;
-	return value;
+void ahbpci_init(void) {
+	ahbpci_host_init();
+	ahbpci_allocate_resources();
 }
 
-uint16_t ahbpci_config_read16(uint8_t dev, uint8_t func, uint8_t ofs) {
-	uint32_t value = ahbpci_config_read32(dev, func, ofs);
-	return (uint16_t)((value >> ((ofs & ~0xfffC) * 8)) & 0x0000ffff);
+en_err_value ahbpci_config_read32(uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset, uint32_t* val) {
+    volatile uint32_t* pci_conf;
+
+    if (offset & 0x03) return en_pcibios_bad_register_number;
+
+    if (slot >= 21) {
+        *val = 0xffffffff;
+        return en_pcibios_successful;
+    }
+
+    pci_conf = (uint32_t*)(ahbpci_cfg_ptr + ((slot << 11) | (function << 8) | offset));
+
+    *val =  *pci_conf;
+
+    if (apb_regs->status & 0x100) {
+        *val = 0xffffffff;
+    }
+
+    printf("pci_read - bus: %d, dev: %d, fn: %d, off: %d => addr: %x, val: %x\n", bus, slot, function, offset,  (1<<(11+slot) ) | ((function & 7)<<8) |  (offset&0x3f), *val);
+
+    return en_pcibios_successful;
 }
 
-uint8_t ahbpci_config_read8(uint8_t dev, uint8_t func, uint8_t ofs) {
-	uint32_t value = ahbpci_config_read32(dev, func, ofs);
-	return (uint8_t)((value >> ((ofs & ~0xfffC) * 8)) & 0x000000ff);
+en_err_value ahbpci_config_read16(uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset, uint16_t* val) {
+    uint32_t v;
+
+    if (offset & 0x01) return en_pcibios_bad_register_number;
+
+    ahbpci_config_read32(bus, slot, function, offset & ~0x03, &v);
+    *val = 0xffff & (v >> (8 * (offset & 0x03)));
+
+    return en_pcibios_successful;
 }
 
-void ahbpci_config_write32(uint8_t dev, uint8_t func, uint8_t ofs, uint32_t value) {
-	uint32_t* address = NULL;
-	uint8_t reg = ofs & ~0x0003;
-	printf("ahbpci_config_write32: ofs = %" PRIx8 ", reg = %" PRIx16 "\n", ofs, reg);
+en_err_value ahbpci_config_read8(uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset, uint8_t* val) {
+	uint32_t v;
 
-	address = (uint32_t*)( (uint32_t)ahbpci_cfg_ptr | (dev << 11) | (func << 8) | (reg << 2) );
-	*address = value;
+    ahbpci_config_read32(bus, slot, function, offset & ~0x03, &v);
+
+    *val = 0xff & (v >> (8 * (offset & 0x03)));
+
+    return en_pcibios_successful;
 }
 
-void ahbpci_config_write16(uint8_t dev, uint8_t func, uint8_t ofs, uint16_t value) {
-	uint32_t tmp = value << ((ofs & 0x0002) * 8);
-	ahbpci_config_write32(dev, func, ofs, tmp);
+en_err_value ahbpci_config_write32(uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset, uint32_t val) {
+    volatile uint32_t* pci_conf;
+
+    if ((offset & 0x03) || bus != 0) return en_pcibios_bad_register_number;
+
+
+    pci_conf = (uint32_t*)(ahbpci_cfg_ptr + ((slot << 11) | (function << 8) | (offset & ~0x03)));
+
+    *pci_conf = val;
+
+    printf("pci write - bus: %d, dev: %d, fn: %d, off: %d => addr: %x, val: %x\n", bus, slot, function, offset, (1<<(11+slot) ) | ((function & 7)<<8) |  (offset&0x3f), val);
+
+    return en_pcibios_successful;
 }
 
-void ahbpci_config_write8(uint8_t dev, uint8_t func, uint8_t ofs, uint8_t value) {
-	uint32_t tmp = value << ((ofs & 0x0003) * 8);
-	ahbpci_config_write32(dev, func, ofs, tmp);
+en_err_value ahbpci_config_write16(uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset, uint16_t val) {
+    uint32_t v;
+
+    if (offset & 0x01) return en_pcibios_bad_register_number;
+
+    ahbpci_config_read32(bus, slot, function, offset & ~0x03, &v);
+
+    v = (v & ~(0xffff << (8 * (offset & 0x03)))) | ((0xffff & val) << (8 * (offset & 0x03)));
+
+    return ahbpci_config_write32(bus, slot, function, offset & ~0x03, v);
 }
 
-uint32_t ahbpci_read_config(uint8_t dev, uint8_t func, uint8_t reg) {
-	uint32_t* address = NULL;
-	uint32_t value = 0;
+en_err_value ahbpci_config_write8(uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset, uint8_t val) {
+	uint32_t v;
 
-	address = (uint32_t*)( (uint32_t)ahbpci_cfg_ptr | (dev << 11) | (func << 8) | (reg << 2) );
-	value = *address;
-	return value;
+	ahbpci_config_read32(bus, slot, function, offset & ~0x03, &v);
+
+    v = (v & ~(0xff << (8 * (offset & 0x03)))) | ((0xff & val) << (8 * (offset & 0x03)));
+
+    return ahbpci_config_write32(bus, slot, function, offset & ~0x03, v);
 }
