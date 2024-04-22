@@ -93,7 +93,7 @@ void ahbpci_host_init(void) {
 
 	grpci2_set_mstmap((struct grpci2regs*)apb_regs_ptr, 0, (unsigned int)ahbpci_mem_ptr); // PCI_ADDR
 
-	printf("conf addr = %" PRIx32 ", mem_ptr = %x", (uint32_t)conf[0].head, grpci2_tw(conf[0].head->bar[0]));
+	printf("conf addr = %" PRIx32 ", mem_ptr = %x\n", (uint32_t)conf[0].head, grpci2_tw(conf[0].head->bar[0]));
 }
 
 void ahbpci_allocate_resources(void) {
@@ -110,7 +110,7 @@ void ahbpci_allocate_resources(void) {
 /*         res[i]->devfn = i; */
 /*     } */
 
-    addr = ahbpci_mem_ptr + 0x10000000;
+    addr = ahbpci_mem_ptr + 0x10000000;  // TODO: проверить нужно ли это смещение
     for(slot = 1; slot < PCI_MAX_DEVICES; slot++) {
 
     	ahbpci_config_read32(0, slot, 0, PCI_VENDOR, &id);
@@ -173,7 +173,7 @@ void ahbpci_allocate_resources(void) {
          	    ahbpci_config_read32(0, dev, fn, 0xC, &tmp);
          	    ahbpci_config_write32(0, dev, fn, 0xC, tmp|0x4000);
 
-         	    printf("dev = %d, func = %d", dev, fn);
+         	    printf("dev = %d, func = %d\n", dev, fn);
          	    // Фиктивное чтение, чтобы получить адрес регистра конф. пространства (dev, func)
          	    ahbpci_config_read32(0, dev, fn, PCI_VENDOR, &tmp);
          	    conf[dev].head = (struct grpci2_head_pci_conf_space_regs*)&tmp;
@@ -205,15 +205,18 @@ en_err_value ahbpci_config_read32(uint8_t bus, uint8_t slot, uint8_t function, u
         return en_pcibios_successful;
     }
 
-    pci_conf = (uint32_t*)(ahbpci_cfg_ptr + ((slot << 11) | (function << 8) | offset));
+    pci_conf = (uint32_t*)((uint32_t)ahbpci_cfg_ptr | ((slot << 11) | (function << 8) | offset));
 
-    *val =  *pci_conf;
+//    *val =  *pci_conf;
+    *val = *pci_conf;
+    *val = grpci2_tw(*val);
 
     if (apb_regs->status & 0x100) {
         *val = 0xffffffff;
     }
 
-    printf("pci_read - bus: %d, dev: %d, fn: %d, off: %d => addr: %x, val: %x\n", bus, slot, function, offset,  (1<<(11+slot) ) | ((function & 7)<<8) |  (offset&0x3f), *val);
+    printf("pci_read - bus: %d, dev: %d, fn: %d, off: 0x%x => addr: %x, val: %x\n", bus, slot, function, offset,
+    		(uint32_t)ahbpci_cfg_ptr | (slot << 11) | (function << 8) | (offset), *val);
 
     return en_pcibios_successful;
 }
@@ -245,11 +248,14 @@ en_err_value ahbpci_config_write32(uint8_t bus, uint8_t slot, uint8_t function, 
     if ((offset & 0x03) || bus != 0) return en_pcibios_bad_register_number;
 
 
-    pci_conf = (uint32_t*)(ahbpci_cfg_ptr + ((slot << 11) | (function << 8) | (offset & ~0x03)));
+    pci_conf = (uint32_t*)((uint32_t)ahbpci_cfg_ptr | ((slot << 11) | (function << 8) | (offset & ~0x03)));
 
+//    *pci_conf = val;
+    val = grpci2_tw(val);
     *pci_conf = val;
 
-    printf("pci write - bus: %d, dev: %d, fn: %d, off: %d => addr: %x, val: %x\n", bus, slot, function, offset, (1<<(11+slot) ) | ((function & 7)<<8) |  (offset&0x3f), val);
+    printf("pci write - bus: %d, dev: %d, fn: %d, off: 0x%x => addr: %x, val: %x\n", bus, slot, function, offset,
+    		(uint32_t)ahbpci_cfg_ptr | (slot << 11) | (function << 8) | (offset), val);
 
     return en_pcibios_successful;
 }
