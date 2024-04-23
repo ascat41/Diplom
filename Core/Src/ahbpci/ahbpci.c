@@ -63,7 +63,7 @@
 
 // private variables
 static uint32_t* const ahbpci_mem_ptr = (uint32_t*)0xE0000000;
-//static uint32_t* const ahbpci_io_ptr  = (uint32_t*)0xFFF80000;
+static uint32_t* const ahbpci_io_ptr  = (uint32_t*)0xFFF80000;
 static uint32_t* const ahbpci_cfg_ptr = (uint32_t*)0xFFF90000;
 
 static uint32_t* const apb_regs_ptr   = (uint32_t*)0x80000400;
@@ -93,28 +93,23 @@ void ahbpci_host_init(void) {
 
 	grpci2_set_mstmap((struct grpci2regs*)apb_regs_ptr, 0, (unsigned int)ahbpci_mem_ptr); // PCI_ADDR
 
-	printf("conf addr = %" PRIx32 ", mem_ptr = %x\n", (uint32_t)conf[0].head, grpci2_tw(conf[0].head->bar[0]));
+	printf("conf addr = %" PRIx32 ", mem_ptr = %x, sta_cmd = %x\n", (uint32_t)conf[0].head, grpci2_tw(conf[0].head->bar[0]),
+			grpci2_tw((uint32_t)conf[0].head->sta_cmd));
 }
 
 void ahbpci_allocate_resources(void) {
-	uint32_t* addr;
+	uint32_t* mem_addr;
+	uint32_t* io_addr;
     uint32_t slot, numfuncs, func, id, pos, size, tmp, dev, fn;
     uint8_t header;
     int32_t bar;
+    uint8_t space_flag;
 
- /*    res = (struct pci_res **) malloc(sizeof(struct pci_res *)*32*8*6); */
-
-/*     for (i = 0; i < 32*8*6; i++) { */
-/*         res[i] = (struct pci_res *) malloc(sizeof(struct pci_res));      */
-/*         res[i]->size = 0; */
-/*         res[i]->devfn = i; */
-/*     } */
-
-    addr = ahbpci_mem_ptr + 0x10000000;  // TODO: проверить нужно ли это смещение
+    mem_addr = ahbpci_mem_ptr + 0x10000000;  // TODO: проверить нужно ли это смещение
+    io_addr  = ahbpci_io_ptr;
     for(slot = 1; slot < PCI_MAX_DEVICES; slot++) {
 
     	ahbpci_config_read32(0, slot, 0, PCI_VENDOR, &id);
-
 
         if(id == 0xffffffff || id == 0) {
             /*
@@ -122,7 +117,6 @@ void ahbpci_allocate_resources(void) {
              */
             continue;
         }
-
 
         ahbpci_config_read8(0, slot, 0, PCI_HDRTYPE, &header);
 
@@ -153,23 +147,27 @@ void ahbpci_allocate_resources(void) {
             	ahbpci_config_write32(0, slot, func, PCI_BAR(pos), 0xffffffff);
             	ahbpci_config_read32(0, slot, func, PCI_BAR(pos), &size);
 
-                if (size == 0 || size == 0xffffffff || (size & 0xff1) != 0) {
+                if (size == 0 || size == 0xffffffff) {
                 	continue;
                 }
-                else {
-                    size &= 0xfffffff0;
+
+                space_flag = size & 0x01;
+
+                if (space_flag) { // io space
+                	size &= 0xfffffffc;
+                } else {          // memory space
+                	size &= 0xfffffff0;
                 }
-           /*          res[slot*8*6+func*6+pos]->size  = ~size+1; */
-/*                     res[slot*8*6+func*6+pos]->devfn = slot*8 + func; */
-/*                     res[slot*8*6+func*6+pos]->bar   = pos; */
 
-                size  = ~size+1;
+                size = ~size+1;
                 bar = pos;
-         	    dev = (slot*8 + func) >> 3;
-         	    fn  = (slot*8 + func) & 7;
+         	    dev = (slot * 8 + func) >> 3;
+         	    fn  = (slot * 8 + func) & 7;
 
-         	    ahbpci_config_write32(0, dev, fn, PCI_BAR(bar), (uint32_t)addr);
-         	    addr += size;
+         	    ahbpci_config_write32(0, dev, fn, PCI_BAR(bar), space_flag ? (uint32_t)io_addr : (uint32_t)mem_addr);
+         	    if (space_flag) io_addr  += size;
+         	    else            mem_addr += size;
+
          	    ahbpci_config_read32(0, dev, fn, 0xC, &tmp);
          	    ahbpci_config_write32(0, dev, fn, 0xC, tmp|0x4000);
 
@@ -179,9 +177,8 @@ void ahbpci_allocate_resources(void) {
          	    conf[dev].head = (struct grpci2_head_pci_conf_space_regs*)&tmp;
          	    conf[dev].ext = (struct grpci2_ext_pci_conf_space_regs*)((uint32_t)conf[dev].head +
          	    				(grpci2_tw(conf[dev].head->cap_pointer) & 0xff));
-//
-//
-////         	   	pci_mem_enable(0, dev, fn);
+
+//         	   	pci_mem_enable(0, dev, fn);
          	    grpci2_mem_enable(&conf[dev]);
 
          	    DBG("Slot: %d, function: %d, bar%d size: %x\n", slot, func, pos, ~size+1);
