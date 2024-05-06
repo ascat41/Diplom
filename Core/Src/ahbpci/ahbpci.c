@@ -83,13 +83,11 @@ void ahbpci_host_init(void) {
 	                 (grpci2_tw(conf[0].head->cap_pointer) & 0xff));
 
 	grpci2_mst_enable(&conf[0]);
-//	*(uint32_t*)0xfff90004 = 0x06003002;
 	grpci2_mem_enable(&conf[0]);
 	grpci2_io_disable(&conf[0]);
 	grpci2_set_latency_timer(&conf[0], 0x20);
 	grpci2_set_bar(&conf[0], 0, (unsigned int)ahbpci_mem_ptr); // PCI_ADDR
 	grpci2_set_barmap(&conf[0], 0, 0);
-//	grpci2_set_bus_big_endian(conf[0]); // TODO: возможно, придется убрать, т.к. этот регистр отстутствует в доке
 
 	grpci2_set_mstmap((struct grpci2regs*)apb_regs_ptr, 0, (unsigned int)ahbpci_mem_ptr); // PCI_ADDR
 
@@ -208,7 +206,8 @@ en_err_value ahbpci_config_read32(uint8_t bus, uint8_t slot, uint8_t function, u
     *val = *pci_conf;
     *val = grpci2_tw(*val);
 
-    if (apb_regs->status & 0x100) {
+    // PCI config access error
+    if (apb_regs->status & (1 << 19)) {
         *val = 0xffffffff;
     }
 
