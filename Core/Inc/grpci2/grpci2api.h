@@ -337,5 +337,10 @@ int grpci2_dma_desc_init(struct grpci2regs* apb, volatile unsigned int **chdesc,
 /* GRPCI2 DMA check transfer ***************************************************** */
   unsigned int grpci2_dma_check(volatile unsigned int **ddesc);
 
+/* GRPCI2 Get Master/Target/DMA enabled ****************************************** */
+int grpci2_get_master(volatile struct grpci2regs* apb);
+int grpci2_get_target(volatile struct grpci2regs* apb);
+int grpci2_get_dma(volatile struct grpci2regs* apb);
+
 
 #endif /* INC_GRPCI2_GRPCI2API_H_ */

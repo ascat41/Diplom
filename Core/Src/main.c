@@ -34,7 +34,8 @@ int __bcc_con_init(void) {
 void timer1_handler(void* arg, int source) {
 	uint32_t tmp = ~GPIO_ptr->OUTPUT & 0x0000FFFF;
 	GPIO_ptr->OUTPUT = tmp;
-	printf("Timer interrupt!\n");
+//	printf("Timer interrupt!\n");
+	printf("\n");
 }
 
 void init() {
@@ -64,6 +65,8 @@ void init() {
 int main() {
 //	setbuf(stdout, NULL);
 	init();
+
+	ahbpci_loopback_test(1);
 
 	while (1) {}
 

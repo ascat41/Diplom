@@ -31,6 +31,9 @@ en_err_value ahbpci_config_write32(uint8_t bus, uint8_t slot, uint8_t function, 
 en_err_value ahbpci_config_write16(uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset, uint16_t val);
 en_err_value ahbpci_config_write8(uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset, uint8_t val);
 
+void grpci2_loopback_test(unsigned int base_addr, unsigned int conf_addr, unsigned int apb_addr,
+                         unsigned int pci_addr, int reset);
+void ahbpci_loopback_test(uint8_t reset);
 
 
 #endif /* INC_AHBPCI_AHBPCI_H_ */
