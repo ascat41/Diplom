@@ -1,5 +1,6 @@
 #include "ahbpci/ahbpci.h"
 #include "grpci2/grpci2api.h"
+#include "ahbpci/pci_conf_access.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -61,14 +62,17 @@
 #define	PCI_MINGNT	     (0x3e)
 #define	PCI_MAXLAT	     (0x3f)
 
+// private functions
+static uint32_t* ahbpci_config_addr(uint8_t bus, uint8_t slot, uint8_t function);
+
 // private variables
 static uint32_t* const ahbpci_mem_ptr = (uint32_t*)0xE0000000;
 static uint32_t* const ahbpci_io_ptr  = (uint32_t*)0xFFF80000;
 static uint32_t* const ahbpci_cfg_ptr = (uint32_t*)0xFFF90000;
 
 static uint32_t* const apb_regs_ptr   = (uint32_t*)0x80000400;
-static struct grpci2regs* apb_regs = (struct grpci2regs*)apb_regs_ptr;
-static struct grpci2_pci_conf_space_regs conf[PCI_MAX_DEVICES];	// conf[0] is host
+
+//static struct grpci2_pci_conf_space_regs conf[PCI_MAX_DEVICES];	// conf[0] is host
 
 // public functions
 //void ahbpci_memspace_init(uint32_t const* ahbpci) {
@@ -88,16 +92,17 @@ static inline int loadmem(int addr){
 };
 
 void ahbpci_host_init(void) {
-	conf[0].head = (struct grpci2_head_pci_conf_space_regs*)ahbpci_cfg_ptr;
-	conf[0].ext = (struct grpci2_ext_pci_conf_space_regs*)((uint32_t)conf[0].head +
-	                 (grpci2_tw(conf[0].head->cap_pointer) & 0xff));
+	pci_conf_add_dev(0, 1);
+	pci_conf_map(0, 0, ahbpci_cfg_ptr);
 
-	grpci2_mst_enable(&conf[0]);
-	grpci2_mem_enable(&conf[0]);
-	grpci2_io_disable(&conf[0]);
-	grpci2_set_latency_timer(&conf[0], 0x20);
-	grpci2_set_bar(&conf[0], 0, (unsigned int)ahbpci_mem_ptr); // PCI_ADDR
-	grpci2_set_barmap(&conf[0], 0, 0);
+	struct grpci2_pci_conf_space_regs* conf0 = get_pci_conf(0, 0);
+
+	grpci2_mst_enable(conf0);
+	grpci2_mem_enable(conf0);
+	grpci2_io_disable(conf0);
+	grpci2_set_latency_timer(conf0, 0x20);
+	grpci2_set_bar(conf0, 0, (unsigned int)ahbpci_mem_ptr); // PCI_ADDR
+	grpci2_set_barmap(conf0, 0, 0);
 
 	grpci2_set_mstmap((struct grpci2regs*)apb_regs_ptr, 0, (unsigned int)ahbpci_mem_ptr); // PCI_ADDR
 
@@ -108,6 +113,7 @@ void ahbpci_host_init(void) {
 void ahbpci_allocate_resources(void) {
 	uint32_t* mem_addr;
 	uint32_t* io_addr;
+	uint32_t* conf_addr;
     uint32_t slot, numfuncs, func, id, pos, size, tmp, dev, fn;
     uint8_t header;
     int32_t bar;
@@ -134,6 +140,8 @@ void ahbpci_allocate_resources(void) {
         else {
             numfuncs = 1;
         }
+
+        pci_conf_add_dev(slot, numfuncs);
 
         for(func = 0; func < numfuncs; func++) {
 
@@ -176,25 +184,14 @@ void ahbpci_allocate_resources(void) {
          	    if (space_flag) io_addr  += size;
          	    else            mem_addr += size;
 
-         	    printf("Slot: %d, function: %d, bar%d size: %x\n", slot, func, pos, size);
+         	    printf("Slot: %d, function: %d, bar%d size: %x\n", dev, fn, pos, size);
             }
 
-			ahbpci_config_read32(0, dev, fn, 0xC, &tmp);
-			ahbpci_config_write32(0, dev, fn, 0xC, tmp|0x4000);
+			ahbpci_config_read32(0, slot, func, 0xC, &tmp);
+			ahbpci_config_write32(0, slot, func, 0xC, tmp|0x4000);
 
-//         	    printf("dev = %d, func = %d\n", dev, fn);
-//         	    // Фиктивное чтение, чтобы получить адрес регистра конф. пространства (dev, func)
-//         	    ahbpci_config_read32(0, dev, fn, PCI_VENDOR, &tmp);
-//         	    conf[dev].head = (struct grpci2_head_pci_conf_space_regs*)&tmp;
-//         	    conf[dev].ext = (struct grpci2_ext_pci_conf_space_regs*)((uint32_t)conf[dev].head +
-//         	    				(grpci2_tw(conf[dev].head->cap_pointer) & 0xff));
-//
-////         	   	pci_mem_enable(0, dev, fn);
-//         	    grpci2_mem_enable(&conf[dev]);
-//
-//			}
-
-
+			conf_addr = ahbpci_config_addr(0, slot, func);
+			pci_conf_map(slot, func, conf_addr);
 		}
 	}
 }
@@ -292,12 +289,14 @@ en_err_value ahbpci_config_write8(uint8_t bus, uint8_t slot, uint8_t function, u
     return ahbpci_config_write32(bus, slot, function, offset & ~0x03, v);
 }
 
+static uint32_t* ahbpci_config_addr(uint8_t bus, uint8_t slot, uint8_t function) {
+	return (uint32_t*)((uint32_t)ahbpci_cfg_ptr | ((slot << 11) | (function << 8)));
+}
+
 void grpci2_loopback_test(unsigned int base_addr, unsigned int conf_addr, unsigned int apb_addr,
                          unsigned int pci_addr, int reset) {
   int i;
   struct grpci2regs *apb;
-//  struct grpci2_pci_conf_space_regs conf_host;
-//  struct grpci2_pci_conf_space_regs *conf[1];
 
   volatile unsigned int* ahbmem;
   volatile unsigned int* pcimem;
@@ -311,10 +310,7 @@ void grpci2_loopback_test(unsigned int base_addr, unsigned int conf_addr, unsign
    *  BAR[0] => AHB AHBMEM
    * ***************************************************************************** */
   apb = (struct grpci2regs*)apb_addr;
-//  conf[0] = (struct grpci2_pci_conf_space_regs*)&conf_host;
-//  conf[0]->head = (struct grpci2_head_pci_conf_space_regs*)conf_addr;
-//  conf[0]->ext = (struct grpci2_ext_pci_conf_space_regs*)((unsigned int)conf[0]->head +
-//                 (grpci2_tw(conf[0]->head->cap_pointer) & 0xff));
+  struct grpci2_pci_conf_space_regs* conf0 = get_pci_conf(0, 0);
 
   printf("Loopback test run!\n");
 
@@ -329,8 +325,8 @@ void grpci2_loopback_test(unsigned int base_addr, unsigned int conf_addr, unsign
   /* Get BASE_ADDR_MASK */
   grpci2_set_mstmap(apb, 0, 0xffffffff);
   unsigned int base_addr_mask = grpci2_get_mstmap(apb, 0);
-  grpci2_set_bar(&conf[0], 0, 0xffffffff);
-  unsigned int pci_addr_mask = grpci2_tw(grpci2_get_bar(&conf[0], 0));
+  grpci2_set_bar(conf0, 0, 0xffffffff);
+  unsigned int pci_addr_mask = grpci2_tw(grpci2_get_bar(conf0, 0));
 
   ahbmem = malloc(sizeof(int)*128);
   pcimem = (volatile unsigned int*)((base_addr & base_addr_mask) | (((pci_addr & pci_addr_mask) | ((unsigned int)(ahbmem) &~ pci_addr_mask)) &~ base_addr_mask));
@@ -338,12 +334,12 @@ void grpci2_loopback_test(unsigned int base_addr, unsigned int conf_addr, unsign
   printf("ahbmem = 0x%x\n", (unsigned int)ahbmem);
   printf("pcimem = 0x%x\n", (unsigned int)pcimem);
 
-  grpci2_mst_enable(&conf[0]);
-  grpci2_mem_enable(&conf[0]);
-  grpci2_io_disable(&conf[0]);
-  grpci2_set_latency_timer(&conf[0], 0x20);
-  grpci2_set_bar(&conf[0], 0, pci_addr);
-  grpci2_set_barmap(&conf[0], 0, ((unsigned int)ahbmem) & 0xfffffff0);
+  grpci2_mst_enable(conf0);
+  grpci2_mem_enable(conf0);
+  grpci2_io_disable(conf0);
+  grpci2_set_latency_timer(conf0, 0x20);
+  grpci2_set_bar(conf0, 0, pci_addr);
+  grpci2_set_barmap(conf0, 0, ((unsigned int)ahbmem) & 0xfffffff0);
 //  grpci2_set_bus_big_endian(conf[0]);
 
   grpci2_set_mstmap(apb, 0, pci_addr);
