@@ -2,6 +2,7 @@
 #define INC_AHBPCI_AHBPCI_H_
 
 #include "grpci2/grpci2api.h"
+#include "pci_conf_access.h"
 
 #include <stdint.h>
 
@@ -21,6 +22,11 @@ typedef enum {
 
 
 //void ahbpci_memspace_init(uint32_t const* ahbpci);
+uint32_t* ahbpci_get_apb_ptr(void);
+uint32_t* ahbpci_get_mem_ptr(void);
+uint32_t* ahbpci_get_io_ptr(void);
+uint32_t* ahbpci_get_cfg_ptr(void);
+
 void ahbpci_host_init(void);
 void ahbpci_allocate_resources(void);
 void ahbpci_init(void);

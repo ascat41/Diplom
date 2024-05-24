@@ -390,28 +390,40 @@ void grpci2_loopback_test(unsigned int base_addr, unsigned int conf_addr, unsign
     ddesc3 = (struct grpci2_dma_data_desc*)ddesc2->next;
 
     /* Setup AHB to PCI transfer 32 words */
-    ddesc1->paddr = (pci_addr & pci_addr_mask) | ((unsigned int)(ahbmem + 32) &~ pci_addr_mask);
-    ddesc1->aaddr = (unsigned int)ahbmem;
-    ddesc1->ctrl = GRPCI2_DMA_DESC_EN | GRPCI2_DMA_DESC_IRQEN*0 | GRPCI2_DMA_DESC_DIR*1 |
-                   GRPCI2_DMA_DESC_TYPE_DATA |
-                   (31 & GRPCI2_DMA_DESC_LENGTH_MASK) << GRPCI2_DMA_DESC_LENGTH;
+    grpci2_dma_add(apb, ddesc1, (pci_addr & pci_addr_mask) | ((unsigned int)(ahbmem + 32) &~ pci_addr_mask),
+    		                    (unsigned int)ahbmem,
+								1, 0, 32);
+
+//    ddesc1->paddr = (pci_addr & pci_addr_mask) | ((unsigned int)(ahbmem + 32) &~ pci_addr_mask);
+//    ddesc1->aaddr = (unsigned int)ahbmem;
+//    ddesc1->ctrl = GRPCI2_DMA_DESC_EN | GRPCI2_DMA_DESC_IRQEN*0 | GRPCI2_DMA_DESC_DIR*1 |
+//                   GRPCI2_DMA_DESC_TYPE_DATA |
+//                   (31 & GRPCI2_DMA_DESC_LENGTH_MASK) << GRPCI2_DMA_DESC_LENGTH;
 
     /* Setup PCI to AHB transfer 16 words */
-    ddesc2->paddr = (pci_addr & pci_addr_mask) | ((unsigned int)(ahbmem + 32) &~ pci_addr_mask);
-    ddesc2->aaddr = (unsigned int)(ahbmem + 64);
-    ddesc2->ctrl = GRPCI2_DMA_DESC_EN | GRPCI2_DMA_DESC_IRQEN*0 | GRPCI2_DMA_DESC_DIR*0 |
-                   GRPCI2_DMA_DESC_TYPE_DATA |
-                   (15 & GRPCI2_DMA_DESC_LENGTH_MASK) << GRPCI2_DMA_DESC_LENGTH;
+    grpci2_dma_add(apb, ddesc2, (pci_addr & pci_addr_mask) | ((unsigned int)(ahbmem + 32) &~ pci_addr_mask),
+    		                    (unsigned int)(ahbmem + 64),
+								0, 0, 16);
+
+//    ddesc2->paddr = (pci_addr & pci_addr_mask) | ((unsigned int)(ahbmem + 32) &~ pci_addr_mask);
+//    ddesc2->aaddr = (unsigned int)(ahbmem + 64);
+//    ddesc2->ctrl = GRPCI2_DMA_DESC_EN | GRPCI2_DMA_DESC_IRQEN*0 | GRPCI2_DMA_DESC_DIR*0 |
+//                   GRPCI2_DMA_DESC_TYPE_DATA |
+//                   (15 & GRPCI2_DMA_DESC_LENGTH_MASK) << GRPCI2_DMA_DESC_LENGTH;
 
     /* Setup AHB to PCI transfer 1 word */
-    ddesc3->paddr = (pci_addr & pci_addr_mask) | ((unsigned int)(ahbmem + 96) &~ pci_addr_mask);
-    ddesc3->aaddr = (unsigned int)(ahbmem + 64);
-    ddesc3->ctrl = GRPCI2_DMA_DESC_EN | GRPCI2_DMA_DESC_IRQEN*0 | GRPCI2_DMA_DESC_DIR*1 |
-                   GRPCI2_DMA_DESC_TYPE_DATA |
-                   (0 & GRPCI2_DMA_DESC_LENGTH_MASK) << GRPCI2_DMA_DESC_LENGTH;
+    grpci2_dma_add(apb, ddesc3, (pci_addr & pci_addr_mask) | ((unsigned int)(ahbmem + 96) &~ pci_addr_mask),
+    		                    (unsigned int)(ahbmem + 64),
+								1, 0, 1);
 
-    /* Start DMA*/
-    apb->dma_ctrl = GRPCI2_DMACTRL_EN;
+//    ddesc3->paddr = (pci_addr & pci_addr_mask) | ((unsigned int)(ahbmem + 96) &~ pci_addr_mask);
+//    ddesc3->aaddr = (unsigned int)(ahbmem + 64);
+//    ddesc3->ctrl = GRPCI2_DMA_DESC_EN | GRPCI2_DMA_DESC_IRQEN*0 | GRPCI2_DMA_DESC_DIR*1 |
+//                   GRPCI2_DMA_DESC_TYPE_DATA |
+//                   (0 & GRPCI2_DMA_DESC_LENGTH_MASK) << GRPCI2_DMA_DESC_LENGTH;
+
+//    /* Start DMA*/
+//    apb->dma_ctrl = GRPCI2_DMACTRL_EN;
 
     /* Wait on desc1 done*/
     while((loadmem((unsigned int)&ddesc1->ctrl) & GRPCI2_DMA_DESC_EN) != 0);
@@ -438,4 +450,20 @@ void grpci2_loopback_test(unsigned int base_addr, unsigned int conf_addr, unsign
 
 void ahbpci_loopback_test(uint8_t reset) {
 	grpci2_loopback_test((unsigned int)ahbpci_mem_ptr, (unsigned int)ahbpci_cfg_ptr, (unsigned int)apb_regs_ptr, (unsigned int)ahbpci_mem_ptr, reset);
+}
+
+uint32_t* ahbpci_get_apb_ptr(void) {
+	return apb_regs_ptr;
+}
+
+uint32_t* ahbpci_get_mem_ptr(void) {
+	return ahbpci_mem_ptr;
+}
+
+uint32_t* ahbpci_get_io_ptr(void) {
+	return ahbpci_io_ptr;
+}
+
+uint32_t* ahbpci_get_cfg_ptr(void) {
+	return ahbpci_cfg_ptr;
 }
