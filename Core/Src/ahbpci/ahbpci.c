@@ -5,15 +5,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <inttypes.h>
-//#include <stdarg.h>
-
-//#ifdef DEBUG
-//#define DBG(x...) printf(x)
-//#else
-//#define DBG(x...)
-//#endif
-
-//#define DEBUG 1
 
 #ifdef DEBUG
 #define DBG(fmt, ...) \
@@ -72,15 +63,6 @@ static uint32_t* const ahbpci_cfg_ptr = (uint32_t*)0xFFF90000;
 
 static uint32_t* const apb_regs_ptr   = (uint32_t*)0x80000400;
 
-//static struct grpci2_pci_conf_space_regs conf[PCI_MAX_DEVICES];	// conf[0] is host
-
-// public functions
-//void ahbpci_memspace_init(uint32_t const* ahbpci) {
-//	ahbpci_mem_ptr = ahbpci + AHBPCI_MEM_OFFSET;
-//	ahbpci_io_ptr  = ahbpci + AHBPCI_IO_OFFSET;
-//	ahbpci_cfg_ptr = ahbpci + AHBPCI_CFG_OFFSET;
-//}
-//
 
 static inline int loadmem(int addr){
   int tmp;
@@ -105,9 +87,6 @@ void ahbpci_host_init(void) {
 	grpci2_set_barmap(conf0, 0, 0);
 
 	grpci2_set_mstmap((struct grpci2regs*)apb_regs_ptr, 0, (unsigned int)ahbpci_mem_ptr); // PCI_ADDR
-
-//	printf("conf addr = %" PRIx32 ", mem_ptr = %x, sta_cmd = %x\n", (uint32_t)conf[0].head, grpci2_tw(conf[0].head->bar[0]),
-//			grpci2_tw((uint32_t)conf[0].head->sta_cmd));
 }
 
 void ahbpci_allocate_resources(void) {
@@ -184,7 +163,7 @@ void ahbpci_allocate_resources(void) {
          	    if (space_flag) io_addr  += size;
          	    else            mem_addr += size;
 
-         	    printf("Slot: %d, function: %d, bar%d size: %x\n", dev, fn, pos, size);
+         	    DBG("Slot: %d, function: %d, bar%d size: %x\n", dev, fn, pos, size);
             }
 
 			ahbpci_config_read32(0, slot, func, 0xC, &tmp);
@@ -198,7 +177,7 @@ void ahbpci_allocate_resources(void) {
 
 void ahbpci_init(void) {
 	ahbpci_host_init();
-//	ahbpci_allocate_resources();
+	ahbpci_allocate_resources();
 }
 
 en_err_value ahbpci_config_read32(uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset, uint32_t* val) {
@@ -213,16 +192,15 @@ en_err_value ahbpci_config_read32(uint8_t bus, uint8_t slot, uint8_t function, u
 
     pci_conf = (uint32_t*)((uint32_t)ahbpci_cfg_ptr | ((slot << 11) | (function << 8) | offset));
 
-//    *val =  *pci_conf;
     *val = *pci_conf;
     *val = grpci2_tw(*val);
 
     // PCI config access error
-//    if (apb_regs->status & (1 << 19)) {
-//        *val = 0xffffffff;
-//    }
+    if (((struct grpci2regs*)apb_regs_ptr)->status & (1 << 19)) {
+        *val = 0xffffffff;
+    }
 
-    printf("pci_read - bus: %d, dev: %d, fn: %d, off: 0x%x => addr: %x, val: %x\n", bus, slot, function, offset,
+    DBG("pci_read - bus: %d, dev: %d, fn: %d, off: 0x%x => addr: %x, val: %x\n", bus, slot, function, offset,
     		(uint32_t)ahbpci_cfg_ptr | (slot << 11) | (function << 8) | (offset), *val);
 
     return en_pcibios_successful;
@@ -257,11 +235,10 @@ en_err_value ahbpci_config_write32(uint8_t bus, uint8_t slot, uint8_t function, 
 
     pci_conf = (uint32_t*)((uint32_t)ahbpci_cfg_ptr | ((slot << 11) | (function << 8) | (offset & ~0x03)));
 
-//    *pci_conf = val;
     val = grpci2_tw(val);
     *pci_conf = val;
 
-    printf("pci write - bus: %d, dev: %d, fn: %d, off: 0x%x => addr: %x, val: %x\n", bus, slot, function, offset,
+    DBG("pci write - bus: %d, dev: %d, fn: %d, off: 0x%x => addr: %x, val: %x\n", bus, slot, function, offset,
     		(uint32_t)ahbpci_cfg_ptr | (slot << 11) | (function << 8) | (offset), val);
 
     return en_pcibios_successful;
@@ -293,46 +270,50 @@ static uint32_t* ahbpci_config_addr(uint8_t bus, uint8_t slot, uint8_t function)
 	return (uint32_t*)((uint32_t)ahbpci_cfg_ptr | ((slot << 11) | (function << 8)));
 }
 
-void grpci2_loopback_test(unsigned int base_addr, unsigned int conf_addr, unsigned int apb_addr,
-                         unsigned int pci_addr, int reset) {
+void ahbpci_loopback_test(uint8_t reset) {
   int i;
   struct grpci2regs *apb;
 
-  volatile unsigned int* ahbmem;
-  volatile unsigned int* pcimem;
+  uint32_t base_addr = (uint32_t)ahbpci_get_mem_ptr();
+  uint32_t conf_addr = (uint32_t)ahbpci_get_cfg_ptr();
+  uint32_t apb_addr = (uint32_t)ahbpci_get_apb_ptr();
+  uint32_t pci_addr = (uint32_t)ahbpci_get_mem_ptr();
+
+  volatile uint32_t* ahbmem;
+  volatile uint32_t* pcimem;
   volatile unsigned int* chbase;
   volatile struct grpci2_dma_data_desc* ddesc1;
   volatile struct grpci2_dma_data_desc* ddesc2;
   volatile struct grpci2_dma_data_desc* ddesc3;
 
-  /* PCI core configuration ******************************************************
+  /* Конфигурация хоста ************************************************************
    *  BAR[0] = PCI_ADDR
    *  BAR[0] => AHB AHBMEM
    * ***************************************************************************** */
   apb = (struct grpci2regs*)apb_addr;
   struct grpci2_pci_conf_space_regs* conf0 = get_pci_conf(0, 0);
 
-  printf("Loopback test run!\n");
+  DBG("Loopback test run!\n");
 
-  // Software reset
+  // Reset
   if (reset != 0) {
     apb->ctrl = GRPCI2_CTRL_RST;
-    if ((apb->ctrl & GRPCI2_CTRL_RST) == 0) printf("Loopback test error: pci reset fail\n");
+    if ((apb->ctrl & GRPCI2_CTRL_RST) == 0) DBG("Loopback test error: pci reset fail\n");
     apb->ctrl = 0x00000000;
-    if ((apb->ctrl & GRPCI2_CTRL_RST) != 0) printf("Loopback test error: pci ctrl reg reset fail\n");
-  };
+    if ((apb->ctrl & GRPCI2_CTRL_RST) != 0) DBG("Loopback test error: pci ctrl reg reset fail\n");
+  }
 
   /* Get BASE_ADDR_MASK */
   grpci2_set_mstmap(apb, 0, 0xffffffff);
-  unsigned int base_addr_mask = grpci2_get_mstmap(apb, 0);
+  uint32_t base_addr_mask = grpci2_get_mstmap(apb, 0);
   grpci2_set_bar(conf0, 0, 0xffffffff);
-  unsigned int pci_addr_mask = grpci2_tw(grpci2_get_bar(conf0, 0));
+  uint32_t pci_addr_mask = grpci2_tw(grpci2_get_bar(conf0, 0));
 
   ahbmem = malloc(sizeof(int)*128);
-  pcimem = (volatile unsigned int*)((base_addr & base_addr_mask) | (((pci_addr & pci_addr_mask) | ((unsigned int)(ahbmem) &~ pci_addr_mask)) &~ base_addr_mask));
+  pcimem = (volatile uint32_t*)((base_addr & base_addr_mask) | (((pci_addr & pci_addr_mask) | ((uint32_t)(ahbmem) &~ pci_addr_mask)) &~ base_addr_mask));
 
-  printf("ahbmem = 0x%x\n", (unsigned int)ahbmem);
-  printf("pcimem = 0x%x\n", (unsigned int)pcimem);
+  DBG("ahbmem = 0x%x\n", (uint32_t)ahbmem);
+  DBG("pcimem = 0x%x\n", (uint32_t)pcimem);
 
   grpci2_mst_enable(conf0);
   grpci2_mem_enable(conf0);
@@ -340,35 +321,35 @@ void grpci2_loopback_test(unsigned int base_addr, unsigned int conf_addr, unsign
   grpci2_set_latency_timer(conf0, 0x20);
   grpci2_set_bar(conf0, 0, pci_addr);
   grpci2_set_barmap(conf0, 0, ((unsigned int)ahbmem) & 0xfffffff0);
-//  grpci2_set_bus_big_endian(conf[0]);
 
   grpci2_set_mstmap(apb, 0, pci_addr);
+
   /* PCI-AHB loopback test */
 
   /* Clear memory */
   for (i=0; i<32; i++){
     *(ahbmem + i) = 0;
-  };
+  }
 
   /* Write to memory via PCI*/
   for (i=0; i<32; i++){
     *(pcimem + i) = i;
-  };
+  }
 
   /* Check memory */
   for (i=0; i<32; i++){
-    if (loadmem((unsigned int)(ahbmem + i)) != i) printf("Loopback test error: ahb memory check fail\n");
-  };
+    if (loadmem((unsigned int)(ahbmem + i)) != i) DBG("Loopback test error: ahb memory check fail\n");
+  }
 
   /* Write to memory*/
   for (i=0; i<32; i++){
     *(ahbmem + i) = 31-i;
-  };
+  }
 
   /* Check memory via PCI*/
   for (i=0; i<32; i++){
-    if (loadmem((unsigned int)(pcimem + i)) != 31-i) printf("Loopback test error: pci memory check fail\n");
-  };
+    if (loadmem((unsigned int)(pcimem + i)) != 31-i) DBG("Loopback test error: pci memory check fail\n");
+  }
 
   if (grpci2_get_dma(apb)){
 
@@ -390,66 +371,41 @@ void grpci2_loopback_test(unsigned int base_addr, unsigned int conf_addr, unsign
     ddesc3 = (struct grpci2_dma_data_desc*)ddesc2->next;
 
     /* Setup AHB to PCI transfer 32 words */
-    grpci2_dma_add(apb, ddesc1, (pci_addr & pci_addr_mask) | ((unsigned int)(ahbmem + 32) &~ pci_addr_mask),
-    		                    (unsigned int)ahbmem,
-								1, 0, 32);
-
-//    ddesc1->paddr = (pci_addr & pci_addr_mask) | ((unsigned int)(ahbmem + 32) &~ pci_addr_mask);
-//    ddesc1->aaddr = (unsigned int)ahbmem;
-//    ddesc1->ctrl = GRPCI2_DMA_DESC_EN | GRPCI2_DMA_DESC_IRQEN*0 | GRPCI2_DMA_DESC_DIR*1 |
-//                   GRPCI2_DMA_DESC_TYPE_DATA |
-//                   (31 & GRPCI2_DMA_DESC_LENGTH_MASK) << GRPCI2_DMA_DESC_LENGTH;
+    grpci2_dma_add(apb, (volatile unsigned int**)&ddesc1, (pci_addr & pci_addr_mask) | ((unsigned int)(ahbmem + 32) &~ pci_addr_mask),
+    		                                              (unsigned int)ahbmem,
+								                          1, 0, 32);
 
     /* Setup PCI to AHB transfer 16 words */
-    grpci2_dma_add(apb, ddesc2, (pci_addr & pci_addr_mask) | ((unsigned int)(ahbmem + 32) &~ pci_addr_mask),
-    		                    (unsigned int)(ahbmem + 64),
-								0, 0, 16);
-
-//    ddesc2->paddr = (pci_addr & pci_addr_mask) | ((unsigned int)(ahbmem + 32) &~ pci_addr_mask);
-//    ddesc2->aaddr = (unsigned int)(ahbmem + 64);
-//    ddesc2->ctrl = GRPCI2_DMA_DESC_EN | GRPCI2_DMA_DESC_IRQEN*0 | GRPCI2_DMA_DESC_DIR*0 |
-//                   GRPCI2_DMA_DESC_TYPE_DATA |
-//                   (15 & GRPCI2_DMA_DESC_LENGTH_MASK) << GRPCI2_DMA_DESC_LENGTH;
+    grpci2_dma_add(apb, (volatile unsigned int**)&ddesc2, (pci_addr & pci_addr_mask) | ((unsigned int)(ahbmem + 32) &~ pci_addr_mask),
+    		                                              (unsigned int)(ahbmem + 64),
+								                          0, 0, 16);
 
     /* Setup AHB to PCI transfer 1 word */
-    grpci2_dma_add(apb, ddesc3, (pci_addr & pci_addr_mask) | ((unsigned int)(ahbmem + 96) &~ pci_addr_mask),
-    		                    (unsigned int)(ahbmem + 64),
-								1, 0, 1);
-
-//    ddesc3->paddr = (pci_addr & pci_addr_mask) | ((unsigned int)(ahbmem + 96) &~ pci_addr_mask);
-//    ddesc3->aaddr = (unsigned int)(ahbmem + 64);
-//    ddesc3->ctrl = GRPCI2_DMA_DESC_EN | GRPCI2_DMA_DESC_IRQEN*0 | GRPCI2_DMA_DESC_DIR*1 |
-//                   GRPCI2_DMA_DESC_TYPE_DATA |
-//                   (0 & GRPCI2_DMA_DESC_LENGTH_MASK) << GRPCI2_DMA_DESC_LENGTH;
-
-//    /* Start DMA*/
-//    apb->dma_ctrl = GRPCI2_DMACTRL_EN;
+    grpci2_dma_add(apb, (volatile unsigned int**)&ddesc3, (pci_addr & pci_addr_mask) | ((unsigned int)(ahbmem + 96) &~ pci_addr_mask),
+    		                                              (unsigned int)(ahbmem + 64),
+								                          1, 0, 1);
 
     /* Wait on desc1 done*/
     while((loadmem((unsigned int)&ddesc1->ctrl) & GRPCI2_DMA_DESC_EN) != 0);
     for (i=0; i<32; i++){
-      if (loadmem((unsigned int)(ahbmem + 32 + i)) != i) printf("Loopback test error: dma test 1 failed\n");
-    };
+      if (loadmem((unsigned int)(ahbmem + 32 + i)) != i) DBG("Loopback test error: dma test 1 failed\n");
+    }
 
     /* Wait on desc2 done*/
     while((loadmem((unsigned int)&ddesc2->ctrl) & GRPCI2_DMA_DESC_EN) != 0);
     for (i=0; i<16; i++){
-      if (loadmem((unsigned int)(ahbmem + 64 + i)) != i) printf("Loopback test error: dma test 2 failed\n");
-    };
+      if (loadmem((unsigned int)(ahbmem + 64 + i)) != i) DBG("Loopback test error: dma test 2 failed\n");
+    }
 
     /* Wait on desc3 done*/
     while((loadmem((unsigned int)&ddesc3->ctrl) & GRPCI2_DMA_DESC_EN) != 0);
     for (i=0; i<1; i++){
-      if (loadmem((unsigned int)(ahbmem + 96 + i)) != i) printf("Loopback test error: dma test 3 failed\n");
-    };
+      if (loadmem((unsigned int)(ahbmem + 96 + i)) != i) DBG("Loopback test error: dma test 3 failed\n");
+    }
 
-  };
+  }
 
-  printf("Loopback test passed!");
-};
-
-void ahbpci_loopback_test(uint8_t reset) {
-	grpci2_loopback_test((unsigned int)ahbpci_mem_ptr, (unsigned int)ahbpci_cfg_ptr, (unsigned int)apb_regs_ptr, (unsigned int)ahbpci_mem_ptr, reset);
+  DBG("Loopback test passed!");
 }
 
 uint32_t* ahbpci_get_apb_ptr(void) {

@@ -289,55 +289,40 @@ struct grpci2_dma_data_desc {
 
 unsigned int grpci2_tw(unsigned int data);
 
-/* GRPCI2 Set/Get AHB Master-to-PCI map ****************************************** */
-  void grpci2_set_mstmap(volatile struct grpci2regs* apb, int mst, unsigned int addr);
-  unsigned int grpci2_get_mstmap(volatile struct grpci2regs* apb, int mst);
+void grpci2_set_mstmap(volatile struct grpci2regs* apb, int mst, unsigned int addr);
+unsigned int grpci2_get_mstmap(volatile struct grpci2regs* apb, int mst);
 
-/* GRPCI2 Set/Get Bus-endiannes ************************************************** */
-  void grpci2_set_bus_litle_endian(volatile struct grpci2_pci_conf_space_regs* conf);
-  void grpci2_set_bus_big_endian(volatile struct grpci2_pci_conf_space_regs* conf);
-  int grpci2_get_endian(volatile struct grpci2_pci_conf_space_regs* conf);
+void grpci2_set_bus_litle_endian(volatile struct grpci2_pci_conf_space_regs* conf);
+void grpci2_set_bus_big_endian(volatile struct grpci2_pci_conf_space_regs* conf);
+int grpci2_get_endian(volatile struct grpci2_pci_conf_space_regs* conf);
 
-/* GRPCI2 Set/Get BARMAP ********************************************************* */
-  void grpci2_set_barmap(volatile struct grpci2_pci_conf_space_regs* conf, int bar, 
-                      unsigned int addr);
-  unsigned int grpci2_get_barmap(volatile struct grpci2_pci_conf_space_regs* conf, int bar);
+void grpci2_set_barmap(volatile struct grpci2_pci_conf_space_regs* conf, int bar,
+				  unsigned int addr);
+unsigned int grpci2_get_barmap(volatile struct grpci2_pci_conf_space_regs* conf, int bar);
 
-/* GRPCI2 Set/Get BAR ************************************************************ */
-  void grpci2_set_bar(volatile struct grpci2_pci_conf_space_regs* conf, int bar, 
-                      unsigned int addr);
-  unsigned int grpci2_get_bar(volatile struct grpci2_pci_conf_space_regs* conf, int bar);
+void grpci2_set_bar(volatile struct grpci2_pci_conf_space_regs* conf, int bar,
+				  unsigned int addr);
+unsigned int grpci2_get_bar(volatile struct grpci2_pci_conf_space_regs* conf, int bar);
 
-/* GRPCI2 Set Latency Timer ****************************************************** */
-  void grpci2_set_latency_timer(volatile struct grpci2_pci_conf_space_regs* conf, int timer);
+void grpci2_set_latency_timer(volatile struct grpci2_pci_conf_space_regs* conf, int timer);
 
-/* GRPCI2 Master Enable/Disable ************************************************** */
-  void grpci2_mst_enable(volatile struct grpci2_pci_conf_space_regs* conf);
-  void grpci2_mst_disable(volatile struct grpci2_pci_conf_space_regs* conf);
+void grpci2_mst_enable(volatile struct grpci2_pci_conf_space_regs* conf);
+void grpci2_mst_disable(volatile struct grpci2_pci_conf_space_regs* conf);
 
-/* GRPCI2 Memory target Enable/Disable ******************************************* */
-  void grpci2_mem_enable(volatile struct grpci2_pci_conf_space_regs* conf);
-  void grpci2_mem_disable(volatile struct grpci2_pci_conf_space_regs* conf);
+void grpci2_mem_enable(volatile struct grpci2_pci_conf_space_regs* conf);
+void grpci2_mem_disable(volatile struct grpci2_pci_conf_space_regs* conf);
 
-/* GRPCI2 IO target Enable/Disable *********************************************** */
-  void grpci2_io_enable(volatile struct grpci2_pci_conf_space_regs* conf);
-  void grpci2_io_disable(volatile struct grpci2_pci_conf_space_regs* conf);
+void grpci2_io_enable(volatile struct grpci2_pci_conf_space_regs* conf);
+void grpci2_io_disable(volatile struct grpci2_pci_conf_space_regs* conf);
 
-/* GRPCI2 DMA Descriptors init *************************************************** */
-int grpci2_dma_desc_init(struct grpci2regs* apb, volatile unsigned int **chdesc, int irqen, 
+void grpci2_dma_desc_init(struct grpci2regs* apb, volatile unsigned int **chdesc, int irqen,
                          int num_ch, int ch_entry);
 
-/* GRPCI2 DMA Descriptors print ************************************************** */
-  void grpci2_dma_desc_print(volatile unsigned int *chdesc);
+int grpci2_dma_add(struct grpci2regs* apb, volatile unsigned int **ddesc, unsigned int paddr,
+				 unsigned int aaddr, int dir, int ien, int length);
 
-/* GRPCI2 DMA add transfer ******************************************************* */
-  int grpci2_dma_add(struct grpci2regs* apb, volatile unsigned int **ddesc, unsigned int paddr, 
-                     unsigned int aaddr, int dir, int ien, int length);
+unsigned int grpci2_dma_check(volatile unsigned int **ddesc);
 
-/* GRPCI2 DMA check transfer ***************************************************** */
-  unsigned int grpci2_dma_check(volatile unsigned int **ddesc);
-
-/* GRPCI2 Get Master/Target/DMA enabled ****************************************** */
 int grpci2_get_master(volatile struct grpci2regs* apb);
 int grpci2_get_target(volatile struct grpci2regs* apb);
 int grpci2_get_dma(volatile struct grpci2regs* apb);
