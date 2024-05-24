@@ -6,7 +6,7 @@
 
 #include <stdint.h>
 
-#define PCI_MAX_DEVICES			(21) // TODO: проверить сколько должно быть
+#define PCI_MAX_DEVICES			(21)
 #define PCI_MAX_FUNCTIONS		 (8)
 
 // Error values that may be returned by the PCI bios.

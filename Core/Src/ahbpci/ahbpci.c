@@ -98,7 +98,7 @@ void ahbpci_allocate_resources(void) {
     int32_t bar;
     uint8_t space_flag;
 
-    mem_addr = ahbpci_mem_ptr + 0x10000000;  // TODO: проверить нужно ли это смещение
+    mem_addr = ahbpci_mem_ptr + 0x10000000;
     io_addr  = ahbpci_io_ptr;
     for(slot = 1; slot < PCI_MAX_DEVICES; slot++) {
 
