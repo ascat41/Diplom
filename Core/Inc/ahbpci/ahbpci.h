@@ -21,7 +21,6 @@ typedef enum {
 } en_err_value;
 
 
-//void ahbpci_memspace_init(uint32_t const* ahbpci);
 uint32_t* ahbpci_get_apb_ptr(void);
 uint32_t* ahbpci_get_mem_ptr(void);
 uint32_t* ahbpci_get_io_ptr(void);
@@ -39,5 +38,11 @@ en_err_value ahbpci_config_write8(uint8_t bus, uint8_t slot, uint8_t function, u
 
 void ahbpci_loopback_test(uint8_t reset);
 
+void ahbpci_enable_interrupts();
+void ahbpci_disable_interrupts();
+void __attribute__((weak)) ahbpci_serr_handler();
+void __attribute__((weak)) ahbpci_dma_handler();
+void __attribute__((weak)) ahbpci_dma_error_handler();
+void __attribute__((weak)) ahbpci_undefined_handler();
 
 #endif /* INC_AHBPCI_AHBPCI_H_ */

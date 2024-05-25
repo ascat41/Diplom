@@ -1,6 +1,9 @@
 #include "mcs9865_driver.h"
 #include "ahbpci/ahbpci.h"
 
+#include <stdio.h>
+#include <inttypes.h>
+
 #define UART_DATA      (0x00) // Регистр данных (RBR/THR)
 #define UART_IER       (0x01) // Регистр разрешения прерываний (IER)
 #define UART_LCR       (0x03) // Регистр управления линией (LCR)
@@ -20,7 +23,7 @@ void mcs9865_driver_simple_test() {
 	uint32_t bar0 = grpci2_tw(cfg->head->bar[0]);
 
 	printf("Vendor/device id = %d\n", grpci2_tw(cfg->head->dev_ven_id));
-	printf("BAR0 = %d\n", bar0);
+	printf("BAR0 = %" PRIu32 "\n", bar0);
 
 	// Настройка UART
 	write_mem((uint32_t)pci_mem, bar0, UART_LCR, 0x80); // DLAB = 1
@@ -29,7 +32,7 @@ void mcs9865_driver_simple_test() {
 	write_mem((uint32_t)pci_mem, bar0, UART_LCR, 0x03); // DLAB = 0, 8bit
 
 	const char message[] = "Hello, World\n";
-	char* c = message;
+	const char* c = message;
 	while (*c) {
 		// Ждём пока регистр передачи (THR) не станет пустым
 		while ( (read_mem((uint32_t)pci_mem, bar0, UART_LSR) & 0x20) == 0 );

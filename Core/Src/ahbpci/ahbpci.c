@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <inttypes.h>
+#include <stdarg.h>
+#include <bcc/bcc.h>
 
 #ifdef DEBUG
 #define DBG(fmt, ...) \
@@ -55,13 +57,15 @@
 
 // private functions
 static uint32_t* ahbpci_config_addr(uint8_t bus, uint8_t slot, uint8_t function);
+static void ahbpci_irq_handler(void *arg, int source);
 
 // private variables
 static uint32_t* const ahbpci_mem_ptr = (uint32_t*)0xE0000000;
 static uint32_t* const ahbpci_io_ptr  = (uint32_t*)0xFFF80000;
 static uint32_t* const ahbpci_cfg_ptr = (uint32_t*)0xFFF90000;
-
 static uint32_t* const apb_regs_ptr   = (uint32_t*)0x80000400;
+
+static void* ahbpci_isr_ctx = NULL;
 
 
 static inline int loadmem(int addr){
@@ -422,4 +426,51 @@ uint32_t* ahbpci_get_io_ptr(void) {
 
 uint32_t* ahbpci_get_cfg_ptr(void) {
 	return ahbpci_cfg_ptr;
+}
+
+void ahbpci_enable_interrupts() {
+	if (!ahbpci_isr_ctx) {
+		ahbpci_isr_ctx = bcc_isr_register(6, ahbpci_irq_handler, NULL);
+		bcc_int_unmask(6);
+	}
+}
+
+void ahbpci_disable_interrupts() {
+	if (ahbpci_isr_ctx) {
+		bcc_isr_unregister(ahbpci_isr_ctx);
+		bcc_int_mask(6);
+	}
+}
+
+static void ahbpci_irq_handler(void *arg, int source) {
+	switch((((struct grpci2regs*)apb_regs_ptr)->status >> 8) & 0x7f) {
+	case (1 << 5): // SERR
+		ahbpci_serr_handler();
+		break;
+	case (1 << 4): // DMA
+		ahbpci_dma_handler();
+		break;
+	case (1 << 3): // DMA error
+		ahbpci_dma_error_handler();
+		break;
+	default:       // others undefined interrupts
+		ahbpci_undefined_handler();
+		break;
+	}
+}
+
+void __attribute__((weak)) ahbpci_serr_handler() {
+	printf("Default pci serr handler\n");
+}
+
+void __attribute__((weak)) ahbpci_dma_handler() {
+	printf("Default pci dma handler\n");
+}
+
+void __attribute__((weak)) ahbpci_dma_error_handler() {
+	printf("Default pci dma error handler\n");
+}
+
+void __attribute__((weak)) ahbpci_undefined_handler() {
+	printf("Default undefined pci handler\n");
 }
